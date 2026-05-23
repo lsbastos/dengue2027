@@ -1,0 +1,358 @@
+---
+title: "Previsão para casos suspeitos de dengue nas macro regiões de saúde do Brasil, 2024"
+author: "Leo Bastos and InfoDengue team"
+format: 
+  html:
+    toc: TRUE
+editor: visual
+---
+
+## Previsões para 2027
+
+Previsões para os casos suspeitos (casos notificados no SINAN) de dengue por semana epidemiológica nas 118 macro regioes do Brasil usando um modelo estatístico de previsão e dados a partir de 2015.
+
+A partir das previsões para as macrorregiões podemos reagregar e estimar totais de casos suspeitos de dengue por UF e para o Brasil.
+
+```{r echo=FALSE, message=FALSE, warning=F}
+# Carregando dados e bibliotecas
+library(tidyverse)
+
+# tbl.macro.forecasts <- read_csv("../tbl.macro.forecasts_2024.csv")
+tbl.macro.forecasts.MC <- read_csv("../tbl.macro.forecasts_2024.MC.csv")
+
+tbl.macro.forecasts <- tbl.macro.forecasts.MC %>% 
+  group_by(CO_UF, UF,CO_MACSAUD, DS_NOMEPAD_macsaud, week) %>% 
+  summarise(
+    Pop = Pop[1],
+    mean = mean(values),
+    sd = sd(values),  
+    `0.025quant` = quantile(values, probs = 0.025),
+    `0.025quant` = quantile(values, probs = 0.025),
+    `0.1quant` = quantile(values, probs = 0.1),
+    `0.25quant` = quantile(values, probs = 0.25),
+    `0.5quant` = quantile(values, probs = 0.5),
+    `0.75quant` = quantile(values, probs = 0.75),
+    `0.9quant` = quantile(values, probs = 0.90),
+    `0.975quant` = quantile(values, probs = 0.975)
+  )
+
+
+# # Total esperado para a macrorregiao
+# media.aux <- sum(out$mean * vec.aux$Pop / 100000)
+# 
+# # Incerteza esperado para a macrorregiao
+# sd.aux <- sqrt(sum(out$sd^2 * (vec.aux$Pop / 100000)^2))
+# 
+# media.aux + c(0, -2, 2) * sd.aux
+
+macro.ids <- unique(tbl.macro.forecasts$CO_MACSAUD)
+
+macro.N.ids <- macro.ids[which(macro.ids < 2000)]
+macro.NE.ids <- macro.ids[which(macro.ids > 2000 & 
+                                macro.ids < 3000)]
+macro.SE.ids <- macro.ids[which(macro.ids > 3000 & 
+                                macro.ids < 4000)]
+macro.S.ids <- macro.ids[which(macro.ids > 4000 & 
+                                macro.ids < 5000)]
+macro.CO.ids <- macro.ids[which(macro.ids > 5000)]
+
+
+threshold.plot <- function( macro ){
+  
+  tbl.thresholds <- tbl.macro.forecasts %>% 
+    filter(CO_MACSAUD == macro)
+  
+  vec.aux <- tbl.thresholds[1,]
+  
+  p <- tbl.thresholds %>% ggplot(aes(x = week)) +
+    geom_ribbon(aes(ymin = 0, ymax = `0.25quant`), fill='yellow', alpha=.15) +
+    # geom_ribbon(aes(ymin = `0.25quant`, ymax = `0.5quant`), fill='orange', alpha=.35) +
+    geom_ribbon(aes(ymin =`0.25quant`, ymax = `0.75quant`), fill='orange', alpha=.65) +
+    geom_ribbon(aes(ymin=`0.75quant`, ymax=`0.9quant`), fill='red', alpha=.35) +
+    geom_ribbon(aes(ymin=`0.9quant`, ymax=Inf), fill='darkred', alpha=.35) +
+    #
+    # geom_line(aes(y = `0.5quant`, linetype = "P50"), color = "orange") +
+    # geom_line(aes(y = `0.25quant`, linetype = "P25"), color = "yellow") +
+    # geom_line(aes(y = `0.75quant`, linetype = "P75"), color = "red") +
+    # geom_line(aes(y = `0.9quant`, linetype = "P90"), color = "darkred") +
+    geom_line(aes(y = `0.5quant`, linetype = "P50")) +
+    geom_line(aes(y = `0.25quant`, linetype = "P25")) +
+    geom_line(aes(y = `0.75quant`, linetype = "P75")) +
+    geom_line(aes(y = `0.9quant`, linetype = "P90")) +
+    scale_linetype_manual(values = c("dashed", "solid", "dashed", "dotted")) + 
+    # geom_pointrange(data = dadosRio %>%
+    #                   filter(SE > 202300) %>%
+    #                   mutate(
+    #                     week = SE - 202300,
+    #                     casos_est_min = casos_est_min / pop * 100000,
+    #                     casos_est_max = casos_est_max / pop * 100000,
+    #                   ),
+    #                 aes(y = p_inc100k,
+    #                     ymin = casos_est_min,
+    #                     ymax = casos_est_max),
+    #                 show.legend = F) +
+  theme_bw(base_size = 16) +
+    labs(
+      x = "Epiweek",
+      y = "Incidência de casos suspeitos de dengue \n (por 100 mil hab.)",
+      title = paste0(vec.aux[2],": ", vec.aux[4], " (", vec.aux[3], ")"),
+      linetype = "Forecasting \n percentiles"
+    ) + 
+    theme(legend.position = c(.85, .82))
+  p
+}
+
+
+all.plots <- map(.x = macro.ids, .f = threshold.plot)
+
+
+```
+
+## Brasil
+
+```{r message=FALSE}
+#| echo=FALSE,
+#| results='asis'
+
+# Plot
+
+gg <- tbl.macro.forecasts.MC %>% 
+  mutate(
+    casos = values * Pop / 100000
+  ) %>% 
+  group_by(week, samples) %>% 
+  summarise(casos = sum(casos)) %>% 
+  group_by(week) %>% 
+  summarise(
+    median = quantile(casos, probs = 0.5),
+    LI = quantile(casos, probs = 0.025),
+    LS = quantile(casos, probs = 0.975),
+  ) %>% 
+  ggplot() + 
+  geom_ribbon(aes(x = week, y = median, ymin = LI, ymax = LS, fill = "IC 95%"), alpha = 0.5) + 
+  geom_line(aes(x = week, y = median, color = "Mediana")) + 
+  theme_bw(base_size = 16) + 
+  theme(legend.position = c(.85,.75)) + 
+  labs(
+    x = "Semana epidemiológica",
+    y = "Casos suspeitos",
+    title = "Previsão de casos de dengue no Brasil, 2024",
+    color = "",
+    fill = ""
+  )
+
+
+
+tbl.br_uf <- bind_cols(UF = "BR",
+                       tbl.macro.forecasts.MC %>% 
+                         mutate(
+                           casos = values * Pop / 100000
+                         ) %>% 
+                         group_by(CO_MACSAUD, samples) %>% 
+                         summarise(
+                           Pop = Pop[1],
+                           casos = sum(casos)) %>% 
+                         group_by(samples) %>%
+                         summarise(
+                           Pop = sum(Pop),
+                           casos = sum(casos)
+                         ) %>% 
+                         summarise(
+                           # casos.mean = mean(casos),
+                           casos.median = quantile(casos, probs = 0.5),
+                           casos.LI = quantile(casos, probs = 0.025),
+                           casos.LS = quantile(casos, probs = 0.975),
+                           # inc.mean = mean(casos/Pop*1e5),
+                           inc.median = quantile(casos/Pop*1e5, probs = 0.5),
+                           inc.LI = quantile(casos/Pop*1e5, probs = 0.025),
+                           inc.LS = quantile(casos/Pop*1e5, probs = 0.975),
+                         )
+)
+
+tbl.br_uf <- bind_rows( tbl.br_uf,
+                       tbl.macro.forecasts.MC %>% 
+                         mutate(
+                           casos = values * Pop / 100000
+                         ) %>% 
+                         group_by(UF, CO_MACSAUD, samples) %>% 
+                         summarise(
+                           Pop = Pop[1],
+                           casos = sum(casos)) %>% 
+                         group_by(UF, samples) %>%
+                         summarise(
+                           Pop = sum(Pop),
+                           casos = sum(casos)
+                         ) %>% 
+                         summarise(
+                           # casos.mean = mean(casos),
+                           casos.median = quantile(casos, probs = 0.5),
+                           casos.LI = quantile(casos, probs = 0.025),
+                           casos.LS = quantile(casos, probs = 0.975),
+                           # inc.mean = mean(casos/Pop*1e5),
+                           inc.median = quantile(casos/Pop*1e5, probs = 0.5),
+                           inc.LI = quantile(casos/Pop*1e5, probs = 0.025),
+                           inc.LS = quantile(casos/Pop*1e5, probs = 0.975),
+                         )
+)
+
+print(gg)
+
+ cat("\n\n")
+ 
+cat("Em 2024, esperamos para o Brasil um total de", round(tbl.br_uf$casos.median[1],0), "casos suspeitos de dengue, essa previsão pode variar entre", round(tbl.br_uf$casos.LI[1],0),"e", round(tbl.br_uf$casos.LS[1],0),"casos.")
+
+```
+
+## Região Norte
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+aaa <- tbl.macro.forecasts %>% filter(CO_MACSAUD %in% macro.N.ids)
+
+uf.aux <- sort(unique(aaa$UF))
+
+for(k in 1:length(uf.aux)){
+  bbb <- tbl.br_uf %>%  filter(UF == uf.aux[k])
+  mac.unique <- sort(unique(aaa$CO_MACSAUD[aaa$UF == uf.aux[k]]))
+
+  cat("### ", uf.aux[k],"\n\n")
+  
+  cat(uf.aux[k],"terá uma incidência anual de", round(bbb$inc.median,2)," casos suspeitos de dengue por 100 mil habitantes. Com um total esperado de casos de", round(bbb$casos.median,0),"casos de dengue a serem notificados em 2024.\n\n")
+  
+  for(mac in mac.unique){
+      print(all.plots[[which(macro.ids == mac)]])
+      cat("\n\n")
+  }
+
+  cat("\n")
+    
+}
+```
+
+## Região Nordeste
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+aaa <- tbl.macro.forecasts %>% filter(CO_MACSAUD %in% macro.NE.ids)
+
+uf.aux <- sort(unique(aaa$UF))
+
+for(k in 1:length(uf.aux)){
+  bbb <- tbl.br_uf %>%  filter(UF == uf.aux[k])
+  mac.unique <- sort(unique(aaa$CO_MACSAUD[aaa$UF == uf.aux[k]]))
+
+  cat("### ", uf.aux[k],"\n\n")
+  
+  cat(uf.aux[k],"terá uma incidência anual de", round(bbb$inc.median,2)," casos suspeitos de dengue por 100 mil habitantes. Com um total esperado de casos de", round(bbb$casos.median,0),"casos de dengue a serem notificados em 2024.\n\n")
+  
+  for(mac in mac.unique){
+      print(all.plots[[which(macro.ids == mac)]])
+      cat("\n")
+  }
+
+  cat("\n")
+    
+}
+```
+
+## Região Sudeste
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+aaa <- tbl.macro.forecasts %>% filter(CO_MACSAUD %in% macro.SE.ids)
+
+uf.aux <- sort(unique(aaa$UF))
+
+for(k in 1:length(uf.aux)){
+  bbb <- tbl.br_uf %>%  filter(UF == uf.aux[k])
+  mac.unique <- sort(unique(aaa$CO_MACSAUD[aaa$UF == uf.aux[k]]))
+
+  cat("### ", uf.aux[k],"\n\n")
+  
+  cat(uf.aux[k],"terá uma incidência anual de", round(bbb$inc.median,2)," casos suspeitos de dengue por 100 mil habitantes. Com um total esperado de casos de", round(bbb$casos.median,0),"casos de dengue a serem notificados em 2024.\n\n")
+
+    
+  for(mac in mac.unique){
+      print(all.plots[[which(macro.ids == mac)]])
+      cat("\n")
+  }
+
+  cat("\n")
+    
+}
+```
+
+## Região Centro Oeste
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+aaa <- tbl.macro.forecasts %>% filter(CO_MACSAUD %in% macro.CO.ids)
+
+uf.aux <- sort(unique(aaa$UF))
+
+for(k in 1:length(uf.aux)){
+  bbb <- tbl.br_uf %>%  filter(UF == uf.aux[k])
+  mac.unique <- sort(unique(aaa$CO_MACSAUD[aaa$UF == uf.aux[k]]))
+
+  cat("### ", uf.aux[k],"\n\n")
+  
+  cat(uf.aux[k],"terá uma incidência anual de", round(bbb$inc.median,2)," casos suspeitos de dengue por 100 mil habitantes. Com um total esperado de casos de", round(bbb$casos.median,0),"casos de dengue a serem notificados em 2024.\n\n")
+
+    
+  for(mac in mac.unique){
+      print(all.plots[[which(macro.ids == mac)]])
+      cat("\n")
+  }
+
+  cat("\n")
+    
+}
+```
+
+## Região Sul
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+aaa <- tbl.macro.forecasts %>% filter(CO_MACSAUD %in% macro.S.ids)
+
+uf.aux <- sort(unique(aaa$UF))
+
+
+for(k in 1:length(uf.aux)){
+  bbb <- tbl.br_uf %>%  filter(UF == uf.aux[k])
+  mac.unique <- sort(unique(aaa$CO_MACSAUD[aaa$UF == uf.aux[k]]))
+
+  cat("### ", uf.aux[k],"\n\n")
+  
+  cat(uf.aux[k],"terá uma incidência anual de", round(bbb$inc.median,2)," casos suspeitos de dengue por 100 mil habitantes. Com um total esperado de casos de", round(bbb$casos.median,0),"casos de dengue a serem notificados em 2024.\n\n")
+
+    
+  for(mac in mac.unique){
+      print(all.plots[[which(macro.ids == mac)]])
+      cat("\n")
+  }
+
+  cat("\n")
+    
+}
+```
+
+## Totais estimados para Brasil e UFs
+
+```{r, echo=FALSE}
+#| label: tbl-br_uf
+#| tbl-cap: "Total de casos e incidência prevista para 2024"
+
+names(tbl.br_uf)[2:7] = c("Mediana de casos", "LI", "LS", "Incidência mediana", "LI", "LS")
+knitr::kable(tbl.br_uf, digits = c(NA,0,0,0,2,2,2))
+```
