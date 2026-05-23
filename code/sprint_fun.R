@@ -13,7 +13,8 @@ forecasting.inla <- function(dados,   # dados - Data containing columns (cases, 
                              likelihood = "nbinomial",
                              timeRE = "rw2",
                              cyclic = T,
-                             WAIC = F){
+                             WAIC = F,
+                             elnino = F){
   
   data.inla <- dados %>% ungroup() %>% 
     transmute(
@@ -27,6 +28,18 @@ forecasting.inla <- function(dados,   # dados - Data containing columns (cases, 
     )  
   
   
+  if(elnino){
+    data.inla <- data.inla |> 
+      mutate(
+        # Strong or very strong El Nino (enso > 1) in the previous year
+        # https://ggweather.com/enso/oni.htm
+        elnino_prev_year = case_when(
+          year == 2016 | year == 2024 | year == 2027 ~ 1,
+          TRUE ~ 0
+        )
+      )
+  }
+
   formula.q <- cases ~ 1 +
     f(week, model = timeRE, constr = T, cyclic = cyclic,
       hyper = list(
@@ -46,6 +59,30 @@ forecasting.inla <- function(dados,   # dados - Data containing columns (cases, 
         )
       )
     )
+
+  
+  if(elnino){
+    formula.q <- cases ~ 1 + elnino_prev_year +
+      f(week, model = timeRE, constr = T, cyclic = cyclic,
+        hyper = list(
+          # Precision of unstructure random effects
+          prec = list(
+            prior="pc.prec",
+            param=c(3, 0.01)
+          )
+        )
+      ) + 
+      f(year, model = "iid", constr = T,
+        hyper = list(
+          # Precision of unstructure random effects
+          prec = list(
+            prior="pc.prec",
+            param=c(3, 0.01)
+          )
+        )
+      )
+    
+  }
   
   # # Adding forecasting component
   # data.inla <- data.inla %>% 

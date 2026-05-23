@@ -5,6 +5,7 @@ library(geofacet)
 source("code/sprint_fun.R")
 
 dengue <- read_csv("data/dengue.csv.gz")
+enso <- read_csv("data/ocean_climate_oscillations.csv.gz")
 
 
 
@@ -19,7 +20,7 @@ dengue <- dengue |>
   ) |> drop_na(casos) 
 
 
-aaa<- dengue |> 
+aaa <- dengue |> 
   group_by(date, uf) |> 
   summarise(casos = sum(casos)) 
 
@@ -41,6 +42,16 @@ dengue.tbl <- dengue %>%
   mutate( n = n())
 
 
+# enso |> 
+#   filter(month(date)> 6) |> 
+#   group_by(year(date)) |> 
+#   summarise(
+#     enso = mean(enso),
+#     fase = case_when( enso > 0.5 ~ 1,
+#                       enso < -.5 ~ -1,
+#                       TRUE ~ 0)) |> 
+#   view()
+
 # For replicability purposes
 set.seed(42)
 
@@ -54,6 +65,9 @@ macros <- unique(dengue$macroregional_geocode)
 
 list.forecast = vector(mode = "list", length = length(macros))
 names(list.forecast) = macros
+
+list.elnino.coefs = vector(mode = "list", length = length(macros))
+names(list.elnino.coefs) = macros
 
 
 #k = 1
@@ -87,7 +101,7 @@ for(k in 1:length(macros)){
   # Forescasting target 3
   aux <- forecasting.inla(dados = data.train.macro.k %>% 
                             filter(Date >= "2015-10-11"), 
-                          MC =T)
+                          MC =T, elnino = T)
   aux$pred$uf = data.train.macro.k$uf[1]
   aux$pred$macrocode = data.train.macro.k$macroregional_geocode[1]
   
@@ -96,11 +110,17 @@ for(k in 1:length(macros)){
   
   list.forecast[[k]]$out <- aux
   
+  list.elnino.coefs[[k]] <- tibble(uf = data.train.macro.k$uf[1], 
+                              macrocode = data.train.macro.k$macroregional_geocode[1],
+                              aux$inla$summary.fixed[2,])
+  
   cat(k, data.train.macro.k$uf[1] , 
       data.train.macro.k$macroregional_geocode[1], "\n")
   
 }
 
+
+coefs.test <- list.elnino.coefs |> bind_rows() 
 
 df.forecast <- list.forecast %>%
   map(function(x) x$out$MC) %>% bind_rows() #|> rename(values2=values)

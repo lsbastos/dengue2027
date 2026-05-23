@@ -1,5 +1,5 @@
 ---
-title: "Previsão para casos suspeitos de dengue nas macro regiões de saúde do Brasil, 2024"
+title: "Previsão para casos suspeitos de dengue nas macro regiões de saúde do Brasil, 2027"
 author: "Leo Bastos and InfoDengue team"
 format: 
   html:
@@ -18,23 +18,24 @@ A partir das previsões para as macrorregiões podemos reagregar e estimar totai
 library(tidyverse)
 
 # tbl.macro.forecasts <- read_csv("../tbl.macro.forecasts_2024.csv")
-tbl.macro.forecasts.MC <- read_csv("../tbl.macro.forecasts_2024.MC.csv")
+uf.total.forecasts <- read_csv("../forecasts/uf.total.forecast.csv")
+uf.week.forecasts <- read_csv("../forecasts/uf.week.forecast.csv")
 
-tbl.macro.forecasts <- tbl.macro.forecasts.MC %>% 
-  group_by(CO_UF, UF,CO_MACSAUD, DS_NOMEPAD_macsaud, week) %>% 
-  summarise(
-    Pop = Pop[1],
-    mean = mean(values),
-    sd = sd(values),  
-    `0.025quant` = quantile(values, probs = 0.025),
-    `0.025quant` = quantile(values, probs = 0.025),
-    `0.1quant` = quantile(values, probs = 0.1),
-    `0.25quant` = quantile(values, probs = 0.25),
-    `0.5quant` = quantile(values, probs = 0.5),
-    `0.75quant` = quantile(values, probs = 0.75),
-    `0.9quant` = quantile(values, probs = 0.90),
-    `0.975quant` = quantile(values, probs = 0.975)
-  )
+# tbl.macro.forecasts <- tbl.macro.forecasts.MC %>% 
+#   group_by(CO_UF, UF,CO_MACSAUD, DS_NOMEPAD_macsaud, week) %>% 
+#   summarise(
+#     Pop = Pop[1],
+#     mean = mean(values),
+#     sd = sd(values),  
+#     `0.025quant` = quantile(values, probs = 0.025),
+#     `0.025quant` = quantile(values, probs = 0.025),
+#     `0.1quant` = quantile(values, probs = 0.1),
+#     `0.25quant` = quantile(values, probs = 0.25),
+#     `0.5quant` = quantile(values, probs = 0.5),
+#     `0.75quant` = quantile(values, probs = 0.75),
+#     `0.9quant` = quantile(values, probs = 0.90),
+#     `0.975quant` = quantile(values, probs = 0.975)
+#   )
 
 
 # # Total esperado para a macrorregiao

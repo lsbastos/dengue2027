@@ -1,0 +1,262 @@
+---
+title: "Previsão para casos suspeitos de dengue nas macro regiões de saúde do Brasil, 2027"
+bibliography: ref.bib
+author: "Leo Bastos and InfoDengue team"
+format: 
+  html:
+    toc: TRUE
+editor: visual
+---
+
+## Previsões para 2027
+
+Previsões para os casos suspeitos de dengue por semana epidemiológica (casos notificados no SINAN) para as 27 unidades da federação brasileiras usando um modelo estatístico de previsão ([@PICININIFREITAS2025]) e dados notificados de 2015 até a 10a semana epidemiológica de 2026 (Dados organizados e disponibilizados para 3o IMDC).
+
+Estimativas originalmente feitas por macrorregião e reagregadas para as UFs e para o Brasil.
+
+```{r echo=FALSE, message=FALSE, warning=F}
+# Carregando dados e bibliotecas
+library(tidyverse)
+# library(patchwork)
+
+# tbl.macro.forecasts <- read_csv("../tbl.macro.forecasts_2024.csv")
+uf.total.forecasts <- read_csv("../forecasts/uf.total.forecast.csv")
+
+uf.total.forecasts[28,]$casos2025 <- sum(uf.total.forecasts$casos2025, na.rm = T)
+
+uf.week.forecasts <- read_csv("../forecasts/uf.week.forecast.csv")
+dengue2025.uf <- read_csv(file = "../data/dengue.csv.gz") |> 
+  filter(epiweek < 202601 & epiweek >= 202501) |> 
+  group_by(uf, date, epiweek) |> 
+  summarise(
+    casos = sum(casos)) |> 
+  mutate(
+    week = epiweek - 202500
+  )
+
+uf.ids <- unique(uf.total.forecasts$uf)
+
+uf.week.forecasts <- uf.week.forecasts |> 
+    left_join(dengue2025.uf |> 
+                ungroup() |> 
+                select(uf, week, casos) |> 
+                bind_rows(
+                  dengue2025.uf |>
+                    ungroup() |> 
+                    group_by(week) |> 
+                    summarise(casos = sum(casos)) |> 
+                    add_column(uf = "BR")
+                  ) 
+              )
+  
+threshold.plot <- function( UF ){
+  
+  tbl.thresholds <- uf.week.forecasts |> 
+    filter(uf == UF)
+  
+  vec.aux <- tbl.thresholds[1,]
+  
+  p <- tbl.thresholds %>% ggplot(aes(x = week)) +
+    geom_ribbon(aes(ymin = 0, ymax = lower_50), fill='yellow', alpha=.15) +
+    # geom_ribbon(aes(ymin = `0.25quant`, ymax = `0.5quant`), fill='orange', alpha=.35) +
+    geom_ribbon(aes(ymin = lower_50, ymax = upper_50), fill='orange', alpha=.65) +
+    geom_ribbon(aes(ymin = upper_50, ymax = upper_90), fill='red', alpha=.35) +
+    geom_ribbon(aes(ymin= upper_50, ymax = Inf), fill='darkred', alpha=.35) +
+    geom_line(aes(y = pred, linetype = "P50")) +
+    geom_line(aes(y = lower_50, linetype = "P25")) +
+    geom_line(aes(y = upper_50, linetype = "P75")) +
+    geom_line(aes(y = upper_90, linetype = "P90")) +
+    scale_linetype_manual(values = c("dashed", "solid", "dashed", "dotted")) + 
+  theme_bw(base_size = 16) +
+    labs(
+      x = "Epiweek",
+      y = "Casos suspeitos de dengue",
+      title = tbl.thresholds[1,1],
+      linetype = "Forecasting \n percentiles"
+    ) + 
+    theme(legend.position = c(.85, .82))
+  
+  p
+}
+
+comp25.plot <- function( UF ){
+  
+  tbl.thresholds <- uf.week.forecasts |> 
+    filter(uf == UF)
+  
+  vec.aux <- tbl.thresholds[1,]
+  
+  p <- tbl.thresholds %>% ggplot(aes(x = week)) +
+    geom_ribbon(aes(ymin = 0, ymax = lower_50), fill='yellow', alpha=.15) +
+    # geom_ribbon(aes(ymin = `0.25quant`, ymax = `0.5quant`), fill='orange', alpha=.35) +
+    geom_ribbon(aes(ymin = lower_50, ymax = upper_50), fill='orange', alpha=.65) +
+    geom_ribbon(aes(ymin = upper_50, ymax = upper_90), fill='red', alpha=.35) +
+    geom_ribbon(aes(ymin= upper_50, ymax = Inf), fill='darkred', alpha=.35) +
+    geom_line(aes(y = pred, linetype = "Estimativas para 2027")) +
+    geom_line(aes(y = casos, linetype = "Casos em 2025")) +
+    scale_linetype_manual(values = c("solid", "dashed")) + 
+  theme_bw(base_size = 16) +
+    labs(
+      x = "Epiweek",
+      y = "Casos suspeitos de dengue",
+      title = tbl.thresholds[1,1],
+      linetype = ""
+    ) + 
+    theme(legend.position = c(.8, .82))
+  
+  p
+}
+
+
+
+
+# all.plots <- map(.x = uf.ids, .f = threshold.plot)
+comp.plots <- map(.x = uf.ids, .f = comp25.plot)
+
+
+
+```
+
+## Brasil
+
+```{r message=FALSE}
+#| echo=FALSE,
+#| results='asis'
+
+# Plot
+
+# Usando o gridExtra (caso prefira)
+# print(all.plots[[28]] | comp.plots[[28]])
+print(comp.plots[[28]])
+
+ cat("\n\n")
+ 
+cat("Em 2027, esperamos para o Brasil um total de", round(uf.total.forecasts$pred[28],0), "casos suspeitos de dengue, essa previsão pode variar entre", round(uf.total.forecasts$lower_90[28],0),"e", round(uf.total.forecasts$upper_90[28],0),"casos.")
+
+```
+
+## 
+
+## Região Norte
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+region.aux <- c("AC", "AM", "AP", "PA", "RO", "RR", "TO")
+uf.index <- which(uf.total.forecasts$uf %in% region.aux)
+
+for(k in 1:length(region.aux)){
+
+  cat("### ", region.aux[k],"\n\n")
+  
+cat("Estimamos para", region.aux[k], "em 2027, um total de ", round(uf.total.forecasts$pred[uf.index[k]],0), "casos suspeitos de dengue, variando de", round(uf.total.forecasts$lower_90[uf.index[k]],0),"até", round(uf.total.forecasts$upper_90[uf.index[k]],0),"casos.")
+  cat("\n\n")
+
+  print(comp.plots[[uf.index[k]]])
+  cat("\n\n")
+}
+```
+
+## Região Nordeste
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+region.aux <- c("AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE")
+uf.index <- which(uf.total.forecasts$uf %in% region.aux)
+
+for(k in 1:length(region.aux)){
+
+  cat("### ", region.aux[k],"\n\n")
+  
+cat("Estimamos para", region.aux[k], "em 2027, um total de ", round(uf.total.forecasts$pred[uf.index[k]],0), "casos suspeitos de dengue, variando de", round(uf.total.forecasts$lower_90[uf.index[k]],0),"até", round(uf.total.forecasts$upper_90[uf.index[k]],0),"casos.")   
+
+  cat("\n\n")
+
+
+  print(comp.plots[[uf.index[k]]])
+  cat("\n\n")
+}
+```
+
+## Região Sudeste
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+region.aux <- c("ES", "MG", "RJ", "SP")
+uf.index <- which(uf.total.forecasts$uf %in% region.aux)
+
+for(k in 1:length(region.aux)){
+
+  cat("### ", region.aux[k],"\n\n")
+  
+cat("Estimamos para", region.aux[k], "em 2027, um total de ", round(uf.total.forecasts$pred[uf.index[k]],0), "casos suspeitos de dengue, variando de", round(uf.total.forecasts$lower_90[uf.index[k]],0),"até", round(uf.total.forecasts$upper_90[uf.index[k]],0),"casos.")
+
+  cat("\n\n")
+
+  print(comp.plots[[uf.index[k]]])
+  cat("\n\n")
+}
+```
+
+## Região Centro Oeste
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+region.aux <- c("DF", "GO", "MS", "MT")
+uf.index <- which(uf.total.forecasts$uf %in% region.aux)
+
+for(k in 1:length(region.aux)){
+
+  cat("### ", region.aux[k],"\n\n")
+  
+cat("Estimamos para", region.aux[k], "em 2027, um total de ", round(uf.total.forecasts$pred[uf.index[k]],0), "casos suspeitos de dengue, variando de", round(uf.total.forecasts$lower_90[uf.index[k]],0),"até", round(uf.total.forecasts$upper_90[uf.index[k]],0),"casos.")
+
+  cat("\n\n")
+
+    print(comp.plots[[uf.index[k]]])
+  cat("\n\n")
+}
+```
+
+## Região Sul
+
+```{r}
+#| echo=FALSE,
+#| results='asis'
+
+region.aux <- c("PR", "SC", "RS")
+uf.index <- which(uf.total.forecasts$uf %in% region.aux)
+
+for(k in 1:length(region.aux)){
+
+  cat("### ", region.aux[k],"\n\n")
+  
+cat("Estimamos para", region.aux[k], "em 2027, um total de ", round(uf.total.forecasts$pred[uf.index[k]],0), "casos suspeitos de dengue, variando de", round(uf.total.forecasts$lower_90[uf.index[k]],0),"até", round(uf.total.forecasts$upper_90[uf.index[k]],0),"casos.")
+
+  cat("\n\n")
+  print(comp.plots[[uf.index[k]]])
+  cat("\n\n")
+}
+```
+
+## Totais estimados para Brasil e UFs
+
+```{r, echo=FALSE}
+#| label: uf.total.forecasts
+#| tbl-cap: "Total de casos previstos para 2027"
+
+names(uf.total.forecasts)[c(1,2,4,9,11)] = c("UF", "Estimativa", "LI", "LS", "Total em 2025")
+knitr::kable(uf.total.forecasts[c(28,1:27),c(1,2,4,9,11)], digits = c(NA,0,0,0,0))
+```
+
+### Referências
+
+::: {#refs}
+:::
