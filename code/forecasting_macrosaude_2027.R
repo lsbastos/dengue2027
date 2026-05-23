@@ -191,7 +191,7 @@ ggplot(tbl.total.plot,
        y = "Differences between obversed and predictied") +
   ylab("Frequency")
 
-write_csv(tbl.total.uf.forecast, file = "forecasts/uf.total.forecast.csv")
+write_csv(tbl.total.plot, file = "forecasts/uf.total.forecast.csv")
 
 
 
