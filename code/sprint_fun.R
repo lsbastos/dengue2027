@@ -92,7 +92,7 @@ forecasting.inla <- function(dados,   # dados - Data containing columns (cases, 
   linear.term.year.cur <- which(data.inla$target == T)
   
   
-  output.mean <- inla(formula = formula.q, 
+  output.mean <- inla(formula = formula.q, num.threads = 8,
                       data = data.inla %>% 
                         mutate(
                           cases = ifelse(target==F, cases, NA)
@@ -144,6 +144,106 @@ forecasting.inla <- function(dados,   # dados - Data containing columns (cases, 
 }
 
 
+forecasting_sprint <- function(macrodata, DT = "2015-10-11"){
+
+  # Forescasting target 3
+  aux <- forecasting.inla(dados = macrodata %>% 
+                            filter(Date >= DT), 
+                          MC =T)
+  aux$pred$uf = macrodata$uf[1]
+  aux$pred$macrocode = macrodata$macroregional_geocode[1]
+  
+  aux$MC$uf = macrodata$uf[1]
+  aux$MC$macrocode = macrodata$macroregional_geocode[1]
+  
+  aux
+}
+
+tbl_total = function(df.forecast){
+  tbl.total.uf.forecast <- df.forecast %>%
+    group_by(uf, samples) %>%
+    summarise(
+      values = sum(values)
+    ) %>% group_by(uf) %>%
+    summarise(
+      pred = median(values),
+      lower_95 =  quantile(values, probs = 0.025),
+      lower_90 =  quantile(values, probs = 0.05),
+      lower_80 = quantile(values, probs = 0.10),
+      lower_50 =  quantile(values, probs = 0.25),
+      upper_50 =  quantile(values, probs = 0.75),
+      upper_80 = quantile(values, probs = 0.9),
+      upper_90 =  quantile(values, probs = 0.95),
+      upper_95 = quantile(values, probs = 0.975),
+    ) %>%
+    bind_rows(
+      tibble(uf = "BR") %>% bind_cols(df.forecast %>%
+                                        group_by(samples) %>%
+                                        summarise(
+                                          values = sum(values)
+                                        ) %>% #group_by(uf) %>%
+                                        summarise(
+                                          pred = median(values),
+                                          lower_95 =  quantile(values, probs = 0.025),
+                                          lower_90 =  quantile(values, probs = 0.05),
+                                          lower_80 = quantile(values, probs = 0.10),
+                                          lower_50 =  quantile(values, probs = 0.25),
+                                          upper_50 =  quantile(values, probs = 0.75),
+                                          upper_80 = quantile(values, probs = 0.9),
+                                          upper_90 =  quantile(values, probs = 0.95),
+                                          upper_95 = quantile(values, probs = 0.975),                                      )
+      )
+    )
+  
+  tbl.total.uf.forecast
+  
+} 
+
+
+
+
+tbl_forecasting_week = function(df.forecast){
+    tbl.total.uf.forecast <- df.forecast %>%
+      group_by(uf, week, samples) %>%
+      summarise(
+        values = sum(values)
+      ) %>% group_by(uf, week) %>%
+      summarise(
+        pred = median(values),
+        lower_95 =  quantile(values, probs = 0.025),
+        lower_90 =  quantile(values, probs = 0.05),
+        lower_80 = quantile(values, probs = 0.10),
+        lower_50 =  quantile(values, probs = 0.25),
+        upper_50 =  quantile(values, probs = 0.75),
+        upper_80 = quantile(values, probs = 0.9),
+        upper_90 =  quantile(values, probs = 0.95),
+        upper_95 = quantile(values, probs = 0.975),
+      ) %>%
+      bind_rows(
+        tibble(uf = "BR") %>% bind_cols(df.forecast %>%
+                                          group_by(week, samples) %>%
+                                          summarise(
+                                            values = sum(values)
+                                          ) %>% #group_by(uf) %>%
+                                          summarise(
+                                            pred = median(values),
+                                            lower_95 =  quantile(values, probs = 0.025),
+                                            lower_90 =  quantile(values, probs = 0.05),
+                                            lower_80 = quantile(values, probs = 0.10),
+                                            lower_50 =  quantile(values, probs = 0.25),
+                                            upper_50 =  quantile(values, probs = 0.75),
+                                            upper_80 = quantile(values, probs = 0.9),
+                                            upper_90 =  quantile(values, probs = 0.95),
+                                            upper_95 = quantile(values, probs = 0.975),                                      )
+        )
+      )
+    
+    tbl.total.uf.forecast
+    
+  } 
+  
+  
+  
 
 threshold.MC <- function(samples.MC){
   thresholdw.data <- samples.MC %>%  

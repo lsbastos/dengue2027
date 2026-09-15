@@ -4,7 +4,22 @@ library(geofacet)
 # library(forecastID)
 source("code/sprint_fun.R")
 
+
 dengue <- read_csv("data/dengue.csv.gz")
+chik <- read_csv("data/chikungunya.csv.gz")
+
+# Removendo dados de 2026
+dengue <- dengue |> filter(date < "2026-01-01") 
+chik <- chik |> filter(date < "2026-01-01") 
+
+# Pegando dados atualizados de 2026
+dengue.update <- read_csv("data/dengue_update_2026.csv.gz")
+chik.update <- read_csv("data/chikungunya_update_2026.csv.gz")
+
+# Atualizando bases
+
+dengue <- dengue |> bind_rows(dengue.update)
+chik <- chik |> bind_rows(chik.update)
 
 
 
@@ -12,7 +27,14 @@ dengue <- read_csv("data/dengue.csv.gz")
 
 # Removing data from 2021 and 2022 from Espirito Santo (There are notification issues)
 
+
 dengue <- dengue |> 
+  mutate(
+    # Removendo casos do ES de 2021 e 2022 (total de casos nesses dois anos 0 e 481!)
+    casos = if_else(uf == "ES" & (epiyear(date) == 2021 | epiyear(date) == 2022), NA, casos)
+  ) |> drop_na(casos) 
+
+chik <- chik |> 
   mutate(
     # Removendo casos do ES de 2021 e 2022 (total de casos nesses dois anos 0 e 481!)
     casos = if_else(uf == "ES" & (epiyear(date) == 2021 | epiyear(date) == 2022), NA, casos)
@@ -52,8 +74,11 @@ set.seed(42)
 macros <- unique(dengue$macroregional_geocode)
 
 
-list.forecast = vector(mode = "list", length = length(macros))
-names(list.forecast) = macros
+list.dengue.forecast = vector(mode = "list", length = length(macros))
+list.chik.forecast = vector(mode = "list", length = length(macros))
+
+names(list.dengue.forecast) = macros
+names(list.chik.forecast) = macros
 
 
 #k = 1
@@ -82,19 +107,34 @@ for(k in 1:length(macros)){
         train = FALSE,
         target = TRUE)
     )
+
+  chik.train.macro.k = chik %>% 
+    filter(
+      macroregional_geocode == macros[k]
+    ) %>% 
+    group_by(Date = date, macroregional_geocode, uf) %>% 
+    summarise(
+      cases = sum(casos),
+      train = TRUE, target = FALSE, .groups = "drop"
+    ) 
   
   
-  # Forescasting target 3
-  aux <- forecasting.inla(dados = data.train.macro.k %>% 
-                            filter(Date >= "2015-10-11"), 
-                          MC =T)
-  aux$pred$uf = data.train.macro.k$uf[1]
-  aux$pred$macrocode = data.train.macro.k$macroregional_geocode[1]
+  chik.train.macro.k = chik.train.macro.k |> 
+    bind_rows(
+      tibble(
+        Date = ymd("2027-01-03") + 7*(0:51),
+        #### aa = "2026-10-05"; ymd(aa) |> epiweek(); ymd(aa) |> wday()
+        # Date = ymd("2026-10-11") + 7*(0:52),
+        macroregional_geocode = data.train.macro.k$macroregional_geocode[1], 
+        uf = data.train.macro.k$uf[1],
+        cases = NA,
+        train = FALSE,
+        target = TRUE)
+    )
   
-  aux$MC$uf = data.train.macro.k$uf[1]
-  aux$MC$macrocode = data.train.macro.k$macroregional_geocode[1]
   
-  list.forecast[[k]]$out <- aux
+  list.dengue.forecast[[k]]$out = forecasting_sprint(data.train.macro.k, DT = "2015-10-11")
+  list.chik.forecast[[k]]$out = forecasting_sprint(chik.train.macro.k, DT = "2015-10-11")
   
   cat(k, data.train.macro.k$uf[1] , 
       data.train.macro.k$macroregional_geocode[1], "\n")
@@ -102,11 +142,11 @@ for(k in 1:length(macros)){
 }
 
 
-df.forecast <- list.forecast %>%
-  map(function(x) x$out$MC) %>% bind_rows() #|> rename(values2=values)
+df.dengue.forecast <- list.dengue.forecast |> 
+  map(function(x) x$out$MC)  |>  bind_rows() #|> rename(values2=values)
 
-# Removing week 53
-df.forecast <- df.forecast |> filter(week < 53)
+df.chik.forecast <- list.chik.forecast |> 
+  map(function(x) x$out$MC)  |> bind_rows() #|> rename(values2=values)
 
 
 # df.forecast.ES <- list.forecast %>% map(function(x) x$out$MC) %>% bind_rows() |> rename(values2=values)
@@ -136,69 +176,111 @@ df.forecast <- df.forecast |> filter(week < 53)
 
 # Forecast por ano
 
-tbl.total.uf.forecast <- df.forecast %>%
-  group_by(uf, samples) %>%
+tbl.total.uf.dengue.forecast <- df.dengue.forecast |> 
+  group_by(uf, samples) |> 
   summarise(
     values = sum(values)
-  ) %>% group_by(uf) %>%
+  ) |>  
+  group_by(uf) |> 
   summarise(
     pred = median(values),
-    lower_95 =  quantile(values, probs = 0.025),
-    lower_90 =  quantile(values, probs = 0.05),
+    lower_95 = quantile(values, probs = 0.025),
+    lower_90 = quantile(values, probs = 0.05),
     lower_80 = quantile(values, probs = 0.10),
-    lower_50 =  quantile(values, probs = 0.25),
-    upper_50 =  quantile(values, probs = 0.75),
+    lower_50 = quantile(values, probs = 0.25),
+    upper_50 = quantile(values, probs = 0.75),
     upper_80 = quantile(values, probs = 0.9),
-    upper_90 =  quantile(values, probs = 0.95),
+    upper_90 = quantile(values, probs = 0.95),
     upper_95 = quantile(values, probs = 0.975),
-  ) %>%
+  ) |> 
   bind_rows(
-    tibble(uf = "BR") %>% bind_cols(df.forecast %>%
-                                      group_by(samples) %>%
-                                      summarise(
-                                        values = sum(values)
-                                      ) %>% #group_by(uf) %>%
-                                      summarise(
-                                        pred = median(values),
-                                        lower_95 =  quantile(values, probs = 0.025),
-                                        lower_90 =  quantile(values, probs = 0.05),
-                                        lower_80 = quantile(values, probs = 0.10),
-                                        lower_50 =  quantile(values, probs = 0.25),
-                                        upper_50 =  quantile(values, probs = 0.75),
-                                        upper_80 = quantile(values, probs = 0.9),
-                                        upper_90 =  quantile(values, probs = 0.95),
-                                        upper_95 = quantile(values, probs = 0.975),                                      )
-    )
+    tibble(uf = "BR")  |> 
+      bind_cols(df.dengue.forecast |> 
+                  group_by(samples) |> 
+                  summarise(
+                    values = sum(values)
+                  )  |> 
+                  summarise(
+                    pred = median(values),
+                    lower_95 = quantile(values, probs = 0.025),
+                    lower_90 = quantile(values, probs = 0.05),
+                    lower_80 = quantile(values, probs = 0.10),
+                    lower_50 = quantile(values, probs = 0.25),
+                    upper_50 = quantile(values, probs = 0.75),
+                    upper_80 = quantile(values, probs = 0.9),
+                    upper_90 = quantile(values, probs = 0.95),
+                    upper_95 = quantile(values, probs = 0.975),                                      
+                  )
+      )
   )
 
 
 
-
-tbl.total.plot <- tbl.total.uf.forecast |> 
-  left_join(dengue |> 
-              filter(year(date) == 2025) |> 
-              group_by(uf) |> 
-              summarise(casos2025 = sum(casos))) |> 
-  mutate(
-    frq = pred - casos2025
+tbl.total.uf.chik.forecast <- df.chik.forecast |> 
+  group_by(uf, samples) |> 
+  summarise(
+    values = sum(values)
+  ) |>  
+  group_by(uf) |> 
+  summarise(
+    pred = median(values),
+    lower_95 = quantile(values, probs = 0.025),
+    lower_90 = quantile(values, probs = 0.05),
+    lower_80 = quantile(values, probs = 0.10),
+    lower_50 = quantile(values, probs = 0.25),
+    upper_50 = quantile(values, probs = 0.75),
+    upper_80 = quantile(values, probs = 0.9),
+    upper_90 = quantile(values, probs = 0.95),
+    upper_95 = quantile(values, probs = 0.975),
+  ) |> 
+  bind_rows(
+    tibble(uf = "BR")  |> 
+      bind_cols(df.chik.forecast |> 
+                  group_by(samples) |> 
+                  summarise(
+                    values = sum(values)
+                  )  |> 
+                  summarise(
+                    pred = median(values),
+                    lower_95 = quantile(values, probs = 0.025),
+                    lower_90 = quantile(values, probs = 0.05),
+                    lower_80 = quantile(values, probs = 0.10),
+                    lower_50 = quantile(values, probs = 0.25),
+                    upper_50 = quantile(values, probs = 0.75),
+                    upper_80 = quantile(values, probs = 0.9),
+                    upper_90 = quantile(values, probs = 0.95),
+                    upper_95 = quantile(values, probs = 0.975),                                      
+                  )
+      )
   )
 
-ggplot(tbl.total.plot, 
-       aes(x=uf, y=frq)) + 
-  geom_bar(aes(fill = frq < 0), stat = "identity") + 
-  scale_fill_manual(guide = FALSE, breaks = c(TRUE, FALSE), values=c("Green", "red")) + 
-  scale_x_discrete(limits = tbl.total.plot$uf)+ theme(legend.position="none")+
-  labs(x = "UFs",
-       y = "Differences between obversed and predictied") +
-  ylab("Frequency")
 
-write_csv(tbl.total.plot, file = "forecasts/uf.total.forecast.csv")
+# tbl.total.plot <- tbl.total.uf.forecast |> 
+#   left_join(dengue |> 
+#               filter(year(date) == 2025) |> 
+#               group_by(uf) |> 
+#               summarise(casos2025 = sum(casos))) |> 
+#   mutate(
+#     frq = pred - casos2025
+#   )
+# 
+# ggplot(tbl.total.plot, 
+#        aes(x=uf, y=frq)) + 
+#   geom_bar(aes(fill = frq < 0), stat = "identity") + 
+#   scale_fill_manual(guide = FALSE, breaks = c(TRUE, FALSE), values=c("Green", "red")) + 
+#   scale_x_discrete(limits = tbl.total.plot$uf)+ theme(legend.position="none")+
+#   labs(x = "UFs",
+#        y = "Differences between obversed and predictied") +
+#   ylab("Frequency")
+
+write_csv(tbl.total.uf.chik.forecast, file = "forecasts/uf.total.chik.forecast.csv")
+write_csv(tbl.total.uf.dengue.forecast, file = "forecasts/uf.total.dengue.forecast.csv")
 
 
 
 
 
-tbl.uf.week.forecast <- df.forecast %>% 
+tbl.uf.week.dengue.forecast <- df.dengue.forecast %>% 
   group_by(uf, week, samples) %>% 
   summarise(
     values = sum(values)
@@ -216,7 +298,7 @@ tbl.uf.week.forecast <- df.forecast %>%
   ) %>% 
   bind_rows(
     tibble(uf = "BR") %>%
-      bind_cols(df.forecast %>%
+      bind_cols(df.dengue.forecast %>%
                   group_by(week, samples) %>%
                   summarise(
                     values = sum(values)
@@ -235,13 +317,61 @@ tbl.uf.week.forecast <- df.forecast %>%
       )
   )
 
-tbl.uf.week.forecast <- tbl.uf.week.forecast |> 
+tbl.uf.week.dengue.forecast <- tbl.uf.week.dengue.forecast |> 
   left_join(
     tibble(week = 1:52, date = ymd("2027-01-03") + 7*(0:51))
     # tibble(week = 1:53, date = ymd("2026-10-11") + 7*(0:52))
   ) |> select(uf, week, date, pred:upper_95)
 
-write_csv(tbl.uf.week.forecast, file = "forecasts/uf.week.forecast.csv")
+
+
+
+tbl.uf.week.chik.forecast <- df.chik.forecast %>% 
+  group_by(uf, week, samples) %>% 
+  summarise(
+    values = sum(values)
+  ) %>% group_by(uf, week) %>% 
+  summarise(
+    pred = median(values),
+    lower_95 =  quantile(values, probs = 0.025),
+    lower_90 =  quantile(values, probs = 0.05),
+    lower_80 = quantile(values, probs = 0.10),
+    lower_50 =  quantile(values, probs = 0.25),
+    upper_50 =  quantile(values, probs = 0.75),
+    upper_80 = quantile(values, probs = 0.9),
+    upper_90 =  quantile(values, probs = 0.95),
+    upper_95 = quantile(values, probs = 0.975),
+  ) %>% 
+  bind_rows(
+    tibble(uf = "BR") %>%
+      bind_cols(df.chik.forecast %>%
+                  group_by(week, samples) %>%
+                  summarise(
+                    values = sum(values)
+                  ) %>% group_by(week) %>%
+                  summarise(
+                    pred = median(values),
+                    lower_95 =  quantile(values, probs = 0.025),
+                    lower_90 =  quantile(values, probs = 0.05),
+                    lower_80 = quantile(values, probs = 0.10),
+                    lower_50 =  quantile(values, probs = 0.25),
+                    upper_50 =  quantile(values, probs = 0.75),
+                    upper_80 = quantile(values, probs = 0.9),
+                    upper_90 =  quantile(values, probs = 0.95),
+                    upper_95 = quantile(values, probs = 0.975),
+                  )
+      )
+  )
+
+tbl.uf.week.chik.forecast <- tbl.uf.week.chik.forecast |> 
+  left_join(
+    tibble(week = 1:52, date = ymd("2027-01-03") + 7*(0:51))
+    # tibble(week = 1:53, date = ymd("2026-10-11") + 7*(0:52))
+  ) |> select(uf, week, date, pred:upper_95)
+
+
+write_csv(tbl.uf.week.dengue.forecast, file = "forecasts/uf.week.dengue.forecast.csv")
+write_csv(tbl.uf.week.chik.forecast, file = "forecasts/uf.week.chik.forecast.csv")
 
 
 aaa <- dengue |> 
@@ -255,7 +385,7 @@ g1 <- ggplot(data = aaa) +
   facet_geo(~uf, grid = "br_states_grid1", scale = "free_y") 
 
 
-g2 <- ggplot(data = tbl.uf.week.forecast) + 
+g2 <- ggplot(data = tbl.uf.week.dengue.forecast) + 
   geom_ribbon( mapping = aes(x = date, y = pred, ymin = lower_50, ymax = upper_50), fill = "red", alpha = 0.5) +
   geom_ribbon( mapping = aes(x = date, y = pred, ymin = lower_80, ymax = upper_80), fill = "red", alpha = 0.25) +
   geom_ribbon( mapping = aes(x = date, y = pred, ymin = lower_90, ymax = upper_90), fill = "red", alpha = 0.15) +
