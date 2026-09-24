@@ -98,7 +98,8 @@ for(k in 1:length(macros)){
   data.train.macro.k = data.train.macro.k |> 
     bind_rows(
       tibble(
-        Date = ymd("2027-01-03") + 7*(0:51),
+        # Date = ymd("2027-01-03") + 7*(0:51),
+        Date = ymd("2026-10-11") + 7*(0:51),
         #### aa = "2026-10-05"; ymd(aa) |> epiweek(); ymd(aa) |> wday()
         # Date = ymd("2026-10-11") + 7*(0:52),
         macroregional_geocode = data.train.macro.k$macroregional_geocode[1], 
@@ -122,7 +123,8 @@ for(k in 1:length(macros)){
   chik.train.macro.k = chik.train.macro.k |> 
     bind_rows(
       tibble(
-        Date = ymd("2027-01-03") + 7*(0:51),
+        # Date = ymd("2027-01-03") + 7*(0:51),
+        Date = ymd("2026-10-11") + 7*(0:51),
         #### aa = "2026-10-05"; ymd(aa) |> epiweek(); ymd(aa) |> wday()
         # Date = ymd("2026-10-11") + 7*(0:52),
         macroregional_geocode = data.train.macro.k$macroregional_geocode[1], 
@@ -273,8 +275,8 @@ tbl.total.uf.chik.forecast <- df.chik.forecast |>
 #        y = "Differences between obversed and predictied") +
 #   ylab("Frequency")
 
-write_csv(tbl.total.uf.chik.forecast, file = "forecasts/uf.total.chik.forecast.csv")
-write_csv(tbl.total.uf.dengue.forecast, file = "forecasts/uf.total.dengue.forecast.csv")
+write_csv(tbl.total.uf.chik.forecast, file = "forecasts/uf.total.chik.forecast_3rimdc.csv")
+write_csv(tbl.total.uf.dengue.forecast, file = "forecasts/uf.total.dengue.forecast_3rimdc.csv")
 
 
 
@@ -319,10 +321,9 @@ tbl.uf.week.dengue.forecast <- df.dengue.forecast %>%
 
 tbl.uf.week.dengue.forecast <- tbl.uf.week.dengue.forecast |> 
   left_join(
-    tibble(week = 1:52, date = ymd("2027-01-03") + 7*(0:51))
-    # tibble(week = 1:53, date = ymd("2026-10-11") + 7*(0:52))
+    # tibble(week = 1:52, date = ymd("2027-01-03") + 7*(0:51))
+    tibble(week = 1:52, date = ymd("2026-10-11") + 7*(0:51))
   ) |> select(uf, week, date, pred:upper_95)
-
 
 
 
@@ -365,13 +366,13 @@ tbl.uf.week.chik.forecast <- df.chik.forecast %>%
 
 tbl.uf.week.chik.forecast <- tbl.uf.week.chik.forecast |> 
   left_join(
-    tibble(week = 1:52, date = ymd("2027-01-03") + 7*(0:51))
-    # tibble(week = 1:53, date = ymd("2026-10-11") + 7*(0:52))
+    # tibble(week = 1:52, date = ymd("2027-01-03") + 7*(0:51))
+    tibble(week = 1:52, date = ymd("2026-10-11") + 7*(0:51))
   ) |> select(uf, week, date, pred:upper_95)
 
 
-write_csv(tbl.uf.week.dengue.forecast, file = "forecasts/uf.week.dengue.forecast.csv")
-write_csv(tbl.uf.week.chik.forecast, file = "forecasts/uf.week.chik.forecast.csv")
+write_csv(tbl.uf.week.dengue.forecast, file = "forecasts/uf.week.dengue.forecast_3rd_imcd.csv")
+write_csv(tbl.uf.week.chik.forecast, file = "forecasts/uf.week.chik.forecast_3rd_imcd.csv")
 
 
 aaa <- dengue |> 
